@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Publikou API Console</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1d2330; --muted: #677085; --border: #dde1e8;
+    --accent: #2f5bd3; --accent-text: #fff; --ok: #1f8a4c; --err: #c23a3a; --warn: #b7791f;
+    --code-bg: #f1f3f7; --key: #7a3fb8; --str: #1f6f43; --num: #b0461b; --id: #2f5bd3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #13161c; --panel: #1b1f27; --text: #e3e7ef; --muted: #8d96aa; --border: #2c323e;
+      --accent: #5b84f0; --accent-text: #fff; --ok: #4cc27f; --err: #f06a6a; --warn: #e0a84a;
+      --code-bg: #12151b; --key: #c39af0; --str: #8fd3a8; --num: #f0a070; --id: #8aaaff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  header label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+  header input { width: 220px; }
+  #session { color: var(--muted); font-size: 13px; }
+  #session b { color: var(--text); }
+  .layout { display: grid; grid-template-columns: 260px 1fr 1fr; height: calc(100vh - 53px); }
+  nav { overflow-y: auto; border-right: 1px solid var(--border); background: var(--panel); padding: 8px 0; }
+  nav h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 14px 4px; }
+  nav button { display: flex; gap: 8px; width: 100%; text-align: left; border: 0; background: none; color: var(--text); padding: 5px 14px; cursor: pointer; font: inherit; }
+  nav button:hover { background: var(--code-bg); }
+  nav button.active { background: var(--accent); color: var(--accent-text); }
+  nav button.active .m { color: var(--accent-text); }
+  .m { font: 600 11px ui-monospace, monospace; width: 44px; flex: none; padding-top: 2px; }
+  .m.GET { color: var(--ok); } .m.POST { color: var(--accent); } .m.PUT, .m.PATCH { color: var(--warn); }
+  section { overflow-y: auto; padding: 16px; }
+  #form-panel { border-right: 1px solid var(--border); }
+  .route { font: 13px ui-monospace, monospace; background: var(--code-bg); padding: 6px 8px; border-radius: 6px; word-break: break-all; }
+  .desc { color: var(--muted); margin: 8px 0 14px; }
+  .badge { font-size: 11px; padding: 1px 6px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); margin-left: 6px; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+  .field small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+  input, select, textarea { width: 100%; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+  textarea { font: 12px ui-monospace, monospace; min-height: 260px; resize: vertical; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .checks label { font-weight: 400; display: flex; gap: 4px; align-items: center; }
+  .checks input { width: auto; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; }
+  button.primary, button.secondary { font: inherit; border-radius: 6px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); }
+  button.secondary { background: none; color: var(--accent); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .status { display: flex; gap: 12px; align-items: baseline; margin-bottom: 8px; font: 13px ui-monospace, monospace; }
+  .status .code { font-weight: 700; }
+  .status .code.ok { color: var(--ok); } .status .code.err { color: var(--err); }
+  .status .meta { color: var(--muted); }
+  .err-box { border: 1px solid var(--err); color: var(--err); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+  pre { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 10px; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+  .k { color: var(--key); } .s { color: var(--str); } .n { color: var(--num); } .b { color: var(--warn); }
+  .id { color: var(--id); text-decoration: underline dotted; cursor: pointer; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .req-line { font: 12px ui-monospace, monospace; color: var(--muted); margin-bottom: 8px; word-break: break-all; }
+  #toast { position: fixed; bottom: 16px; right: 16px; background: var(--text); color: var(--bg); padding: 8px 12px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: .92; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    nav, #form-panel { border-right: 0; border-bottom: 1px solid var(--border); }
+    nav { max-height: 40vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Publikou API Console</h1>
+  <label>Base URL <input id="base-url" spellcheck="false"></label>
+  <label>Token <input id="token" placeholder="Bearer JWT (preenchido no login)" spellcheck="false"></label>
+  <button class="secondary" id="logout">Limpar sessão</button>
+  <span id="session"></span>
+</header>
+<div class="layout">
+  <nav id="nav"></nav>
+  <section id="form-panel"></section>
+  <section id="response-panel"><p class="desc">Escolha um endpoint e envie a requisição.</p></section>
+</div>
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+const MODALITIES = 'electronic_auction competitive_dialogue contest electronic_competitive_bidding in_person_competitive_bidding electronic_reverse_auction in_person_reverse_auction procurement_exemption sole_source_procurement expression_of_interest pre_qualification accreditation in_person_auction'.split(' ');
+const page = [
+  { name: 'page', in: 'query', type: 'number', placeholder: '1' },
+  { name: 'page_size', in: 'query', type: 'number', placeholder: '25 (máx. 50)' },
+];
+const ITEM_TYPE = { type: 'select', options: ['material', 'service'] };
+const BOOL = { type: 'bool' };
+
+const PREFERENCES_TEMPLATE = {
+  catalog_class_ids: [],
+  catalog_item_ids: [],
+  keywords: [],
+  locations: [{ state_code: 'SP', id_city: null }],
+  value_min: null,
+  value_max: null,
+  min_days_to_close: null,
+  material: true,
+  service: true,
+  company_size_exclusivity: [],
+  modality: [],
+  dispute_mode: [],
+  judgment_criterion: [],
+  price_registration_system: null,
+  has_normal_preference_margin: null,
+  has_additional_preference_margin: null,
+};
+
+const ENDPOINTS = [
+  { group: 'Sistema', method: 'GET', path: '/health', auth: false, desc: 'Responde 200 quando o servidor está de pé.' },
+
+  { group: 'Autenticação', method: 'POST', path: '/public/user', auth: false, desc: 'Cria usuário.', fields: [
+    { name: 'email', in: 'body', required: true },
+    { name: 'password', in: 'body', type: 'password', required: true, hint: '8 a 72 caracteres' },
+    { name: 'full_name', in: 'body', required: true },
+    { name: 'phone', in: 'body' },
+  ]},
+  { group: 'Autenticação', method: 'POST', path: '/public/auth/login', auth: false, desc: 'Login. O token retornado é guardado e usado nas rotas /internal.', fields: [
+    { name: 'email', in: 'body', required: true },
+    { name: 'password', in: 'body', type: 'password', required: true },
+  ], after: (r) => { if (r.token) setSession(r.token, r.id_user, r.full_name); } },
+  { group: 'Autenticação', method: 'GET', path: '/internal/user/:id', desc: 'Dados do usuário (cache de 1h no backend).', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_user' },
+  ]},
+
+  { group: 'Fornecedor', method: 'POST', path: '/internal/supplier', desc: 'Cadastra fornecedor pelo CNPJ (consulta a BrasilAPI).', fields: [
+    { name: 'tax_id', in: 'body', required: true, hint: 'CNPJ, só números' },
+  ], after: (r) => r.supplier && remember('id_supplier', r.supplier.id_supplier) },
+  { group: 'Fornecedor', method: 'GET', path: '/internal/supplier', desc: 'Fornecedores do usuário logado.', fields: [...page],
+    after: (r) => r.data && r.data[0] && !stored('id_supplier') && remember('id_supplier', r.data[0].id_supplier) },
+  { group: 'Fornecedor', method: 'GET', path: '/internal/supplier/:id', desc: 'Detalhe do fornecedor.', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_supplier' },
+  ]},
+  { group: 'Fornecedor', method: 'GET', path: '/internal/supplier/:id/preferences', desc: 'Preferências do fornecedor, com classes e itens do catálogo.', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_supplier' },
+  ]},
+  { group: 'Fornecedor', method: 'POST', path: '/internal/supplier/:id/preferences', desc: 'Cadastra as preferências (só uma vez; depois use PUT).', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_supplier' },
+    { name: 'body', in: 'json', template: PREFERENCES_TEMPLATE },
+  ]},
+  { group: 'Fornecedor', method: 'PUT', path: '/internal/supplier/:id/preferences', desc: 'Substitui as preferências.', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_supplier' },
+    { name: 'body', in: 'json', template: PREFERENCES_TEMPLATE },
+  ]},
+
+  { group: 'Catálogo e municípios', method: 'GET', path: '/internal/catalog/group', desc: 'Grupos do catálogo CATMAT/CATSER.', fields: [
+    { name: 'type', in: 'query', required: true, ...ITEM_TYPE },
+    { name: 'code', in: 'query', type: 'number' },
+    { name: 'name', in: 'query', hint: 'parte do nome, mín. 2' },
+    ...page,
+  ]},
+  { group: 'Catálogo e municípios', method: 'GET', path: '/internal/catalog/group/:id/class', desc: 'Classes de um grupo.', fields: [
+    { name: 'id', in: 'path', required: true, hint: 'id_catalog_group' },
+    { name: 'code', in: 'query', type: 'number' },
+    { name: 'name', in: 'query' },
+    ...page,
+  ]},
+  { group: 'Catálogo e municípios', method: 'GET', path: '/internal/catalog/item', desc: 'Itens (PDM ou serviço) por classe ou pelo nome.', fields: [
+    { name: 'id_catalog_class', in: 'query' },
+    { name: 'type', in: 'query', ...ITEM_TYPE },
+    { name: 'code', in: 'query', type: 'number' },
+    { name: 'name', in: 'query', hint: 'a última palavra pode ser só o começo' },
+    ...page,
+  ]},
+  { group: 'Catálogo e municípios', method: 'GET', path: '/internal/city', desc: 'Busca de municípios do IBGE.', fields: [
+    { name: 'q', in: 'query', required: true, hint: 'começo do nome, mín. 2' },
+    { name: 'state', in: 'query', hint: 'UF maiúscula, ex.: SP' },
+    ...page,
+  ]},
+
+  { group: 'Oportunidades', method: 'POST', path: '/internal/supplier/:id/match', desc: 'Refaz o match do fornecedor com as contratações abertas.', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_supplier' },
+  ]},
+  { group: 'Oportunidades', method: 'GET', path: '/internal/supplier/:id/opportunity', desc: 'Oportunidades do fornecedor por relevância.', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_supplier' },
+    { name: 'status', in: 'query', type: 'multi', options: ['sent', 'interested', 'discarded'], hint: 'vazio traz tudo menos descartadas' },
+    { name: 'new', in: 'query', ...BOOL, hint: 'inclui as sem status quando status é informado' },
+    { name: 'closed', in: 'query', ...BOOL, hint: 'inclui propostas encerradas' },
+    ...page,
+  ], after: (r) => r.data && r.data[0] && remember('id_opportunity_match', r.data[0].id_opportunity_match) },
+  { group: 'Oportunidades', method: 'GET', path: '/internal/opportunity/:id', desc: 'Detalhe, com os itens que casaram.', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_opportunity_match' },
+  ]},
+  { group: 'Oportunidades', method: 'PATCH', path: '/internal/opportunity/:id', desc: 'Retorno do fornecedor.', fields: [
+    { name: 'id', in: 'path', required: true, remember: 'id_opportunity_match' },
+    { name: 'status', in: 'body', type: 'select', options: ['interested', 'discarded', 'null'], hint: '"null" desfaz' },
+  ]},
+
+  { group: 'Adm: sincronização', method: 'GET', path: '/internal/sync', admin: true, desc: 'Execuções de sincronização.', fields: [
+    { name: 'status', in: 'query', type: 'select', options: ['running', 'success', 'failed'] },
+    ...page,
+  ]},
+  { group: 'Adm: sincronização', method: 'POST', path: '/internal/job/:job/run', admin: true, desc: 'Roda um job agora, em segundo plano.', fields: [
+    { name: 'job', in: 'path', required: true, type: 'select', options: ['sync-insert', 'sync-update', 'classify-pending'] },
+  ]},
+  { group: 'Adm: sincronização', method: 'POST', path: '/internal/sync/:id/retry', admin: true, desc: 'Retentativa de sincronização com falha.', fields: [
+    { name: 'id', in: 'path', required: true, hint: 'id_sync' },
+  ]},
+
+  { group: 'Adm: classificação', method: 'GET', path: '/internal/classification/stats', admin: true, desc: 'Cobertura por método e precisão das conferências.', fields: [
+    { name: 'all', in: 'query', ...BOOL, hint: 'conta também contratações encerradas' },
+  ]},
+  { group: 'Adm: classificação', method: 'GET', path: '/internal/classification/sample', admin: true, desc: 'Amostra aleatória de itens classificados.', fields: [
+    { name: 'type', in: 'query', ...ITEM_TYPE },
+    { name: 'method', in: 'query', type: 'select', options: ['code', 'name', 'short_name', 'similar', 'keyword', 'external', 'none'] },
+    { name: 'unreviewed', in: 'query', ...BOOL },
+    { name: 'limit', in: 'query', type: 'number', placeholder: '20 (máx. 200)' },
+  ]},
+  { group: 'Adm: classificação', method: 'POST', path: '/internal/classification/review', admin: true, desc: 'Marca se a classe do item está certa. Refazer substitui.', fields: [
+    { name: 'id_procurement_item', in: 'body', required: true },
+    { name: 'correct', in: 'body', required: true, ...BOOL },
+    { name: 'id_catalog_class_expected', in: 'body', hint: 'quando está errada' },
+    { name: 'note', in: 'body', hint: 'máx. 500' },
+  ]},
+  { group: 'Adm: classificação', method: 'GET', path: '/internal/classification/export', admin: true, desc: 'Itens para classificar fora do sistema. Cursor: after = next_after.', fields: [
+    { name: 'methods', in: 'query', placeholder: 'none,wrong', hint: 'separados por vírgula' },
+    { name: 'type', in: 'query', ...ITEM_TYPE },
+    { name: 'all', in: 'query', ...BOOL },
+    { name: 'after', in: 'query' },
+    { name: 'limit', in: 'query', type: 'number', placeholder: '1000 (máx. 5000)' },
+  ]},
+  { group: 'Adm: classificação', method: 'POST', path: '/internal/classification/import', admin: true, desc: 'Grava classificação externa (até 1000 itens).', fields: [
+    { name: 'body', in: 'json', template: { dry_run: true, items: [{ id_procurement_item: '', catalog_item_code: null, catalog_class_code: null }] } },
+  ]},
+];
+
+const $ = (s) => document.querySelector(s);
+const store = {
+  get(k) { try { return localStorage.getItem('pk:' + k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem('pk:' + k) : localStorage.setItem('pk:' + k, v); } catch {} },
+};
+const stored = (k) => store.get('id:' + k);
+const remember = (k, v) => v && store.set('id:' + k, v);
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+function setSession(token, idUser, name) {
+  store.set('token', token);
+  $('#token').value = token || '';
+  if (idUser) remember('id_user', idUser);
+  if (name) store.set('name', name);
+  renderSession();
+}
+
+function renderSession() {
+  const name = store.get('name'), id = stored('id_user');
+  $('#session').innerHTML = $('#token').value
+    ? `Logado${name ? ' como <b>' + esc(name) + '</b>' : ''}${id ? ' · ' + esc(id) : ''}`
+    : 'Sem token';
+}
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let current = null;
+
+function renderNav() {
+  const nav = $('#nav');
+  let group = null;
+  ENDPOINTS.forEach((ep, i) => {
+    if (ep.group !== group) {
+      group = ep.group;
+      nav.insertAdjacentHTML('beforeend', `<h2>${esc(group)}</h2>`);
+    }
+    const b = document.createElement('button');
+    b.innerHTML = `<span class="m ${ep.method}">${ep.method}</span><span>${esc(ep.path)}</span>`;
+    b.onclick = () => select(i);
+    b.dataset.i = i;
+    nav.appendChild(b);
+  });
+}
+
+function fieldHtml(f, ep) {
+  const id = 'f-' + f.name;
+  const label = `<label for="${id}">${esc(f.name)}${f.required ? ' *' : ''}<small>${f.in}${f.hint ? ' · ' + esc(f.hint) : ''}</small></label>`;
+  const saved = store.get(`v:${ep.method} ${ep.path}:${f.name}`);
+  const pre = f.remember ? (stored(f.remember) || saved || '') : (saved || '');
+  if (f.in === 'json') {
+    const val = saved || JSON.stringify(f.template, null, 2);
+    return `<div class="field"><label for="${id}">corpo JSON</label><textarea id="${id}" spellcheck="false">${esc(val)}</textarea></div>`;
+  }
+  if (f.type === 'select' || f.type === 'bool') {
+    const opts = f.type === 'bool' ? ['true', 'false'] : f.options;
+    return `<div class="field">${label}<select id="${id}"><option value="">—</option>${opts.map((o) => `<option ${o === pre ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+  }
+  if (f.type === 'multi') {
+    const sel = (pre || '').split(',');
+    return `<div class="field">${label}<div class="checks" id="${id}">${f.options.map((o) => `<label><input type="checkbox" value="${o}" ${sel.includes(o) ? 'checked' : ''}>${o}</label>`).join('')}</div></div>`;
+  }
+  const type = f.type === 'number' ? 'number' : f.type === 'password' ? 'password' : 'text';
+  return `<div class="field">${label}<input id="${id}" type="${type}" value="${f.type === 'password' ? '' : esc(pre)}" placeholder="${esc(f.placeholder || '')}" spellcheck="false"></div>`;
+}
+
+function select(i) {
+  current = ENDPOINTS[i];
+  store.set('endpoint', i);
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', +b.dataset.i === i));
+  const ep = current;
+  const fields = ep.fields || [];
+  const hasJson = fields.some((f) => f.in === 'json');
+  $('#form-panel').innerHTML = `
+    <div class="route"><b>${ep.method}</b> ${esc(ep.path)}</div>
+    <p class="desc">${esc(ep.desc || '')}${ep.auth === false ? '<span class="badge">público</span>' : '<span class="badge">JWT</span>'}${ep.admin ? '<span class="badge">adm</span>' : ''}</p>
+    <form id="ep-form">
+      ${fields.map((f) => fieldHtml(f, ep)).join('') || '<p class="desc">Sem parâmetros.</p>'}
+      <div class="actions">
+        <button class="primary" type="submit" id="send">Enviar</button>
+        ${hasJson ? '<button class="secondary" type="button" id="reset-json">Restaurar modelo</button>' : ''}
+      </div>
+    </form>
+    <p class="hint">Clique num id na resposta para copiar. Ctrl+Enter envia.</p>`;
+  $('#ep-form').onsubmit = (e) => { e.preventDefault(); send(); };
+  if (hasJson) $('#reset-json').onclick = () => {
+    const f = fields.find((x) => x.in === 'json');
+    $('#f-' + f.name).value = JSON.stringify(f.template, null, 2);
+  };
+}
+
+function readField(f) {
+  const el = $('#f-' + f.name);
+  if (f.type === 'multi') return [...el.querySelectorAll('input:checked')].map((c) => c.value);
+  return el.value.trim();
+}
+
+function convert(f, v) {
+  if (f.type === 'number') return Number(v);
+  if (f.type === 'bool') return v === 'true';
+  if (v === 'null') return null;
+  return v;
+}
+
+async function send() {
+  const ep = current;
+  let path = ep.path;
+  const query = new URLSearchParams();
+  let body;
+
+  for (const f of ep.fields || []) {
+    const v = readField(f);
+    if (f.type !== 'password' && f.in !== 'json') store.set(`v:${ep.method} ${ep.path}:${f.name}`, Array.isArray(v) ? v.join(',') : v);
+    if (f.in === 'json') {
+      store.set(`v:${ep.method} ${ep.path}:${f.name}`, v);
+      try { body = JSON.parse(v); } catch (e) { return showLocalError('JSON inválido: ' + e.message); }
+      continue;
+    }
+    const empty = Array.isArray(v) ? v.length === 0 : v === '';
+    if (empty) {
+      if (f.required) return showLocalError(`Campo obrigatório: ${f.name}`);
+      continue;
+    }
+    if (f.remember && f.in === 'path') remember(f.remember, v);
+    if (f.in === 'path') path = path.replace(':' + f.name, encodeURIComponent(v));
+    else if (f.in === 'query') (Array.isArray(v) ? v : [v]).forEach((x) => query.append(f.name, x));
+    else if (f.in === 'body') (body ??= {})[f.name] = convert(f, v);
+  }
+  if ((ep.fields || []).some((f) => f.name === 'page_size')) {
+    if (!query.has('page')) query.set('page', '1');
+    if (!query.has('page_size')) query.set('page_size', '25');
+  }
+  if (!body && ['POST', 'PUT', 'PATCH'].includes(ep.method) && (ep.fields || []).some((f) => f.in === 'body')) body = {};
+  if (ep.method === 'PATCH' && body && !('status' in body)) body.status = null;
+
+  const base = $('#base-url').value.replace(/\/+$/, '');
+  const qs = query.toString();
+  const url = base + path + (qs ? '?' + qs : '');
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const token = $('#token').value.trim();
+  if (ep.auth !== false && token) headers.Authorization = 'Bearer ' + token.replace(/^Bearer\s+/i, '');
+
+  const btn = $('#send');
+  btn.disabled = true;
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, { method: ep.method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+    const ms = Math.round(performance.now() - t0);
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch {}
+    showResponse({ ep, url, body, status: res.status, statusText: res.statusText, ms, data, text });
+    if (res.ok && data && ep.after) { ep.after(data); renderSession(); }
+    if (res.status === 401 && ep.auth !== false) toast('401: token ausente, inválido ou expirado (JWT_TTL=30m). Faça login.');
+  } catch (e) {
+    showResponse({ ep, url, body, networkError: e });
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showLocalError(msg) {
+  $('#response-panel').innerHTML = `<div class="err-box">${esc(msg)}</div>`;
+}
+
+function showResponse(r) {
+  const p = $('#response-panel');
+  const reqLine = `<div class="req-line">${r.ep.method} ${esc(r.url)}</div>`;
+  const reqBody = r.body !== undefined ? `<details><summary class="hint">corpo enviado</summary><pre>${highlight(r.body)}</pre></details><br>` : '';
+  if (r.networkError) {
+    p.innerHTML = reqLine + `<div class="err-box"><b>Falha de rede:</b> ${esc(r.networkError.message)}<br>O backend está rodando em ${esc($('#base-url').value)}? (<code>make run</code> no publikou-backend-service)</div>` + reqBody;
+    return;
+  }
+  const ok = r.status >= 200 && r.status < 300;
+  let errBox = '';
+  if (!ok && r.data && (r.data.message || r.data.code)) {
+    errBox = `<div class="err-box"><b>${esc(r.data.code || 'erro')}</b>${r.data.message ? ': ' + esc(r.data.message) : ''}</div>`;
+  }
+  const bodyHtml = r.data !== null ? highlight(r.data) : (r.text ? esc(r.text) : '<span class="hint">(sem corpo)</span>');
+  p.innerHTML = reqLine + `
+    <div class="status"><span class="code ${ok ? 'ok' : 'err'}">${r.status} ${esc(r.statusText)}</span><span class="meta">${r.ms} ms</span></div>
+    ${errBox}${reqBody}<pre>${bodyHtml}</pre>`;
+}
+
+const ID_RE = /^[a-z]{3}_[0-9A-Za-z]{27}$/;
+
+function highlight(v, ind = '') {
+  const next = ind + '  ';
+  if (v === null) return '<span class="b">null</span>';
+  if (typeof v === 'boolean') return `<span class="b">${v}</span>`;
+  if (typeof v === 'number') return `<span class="n">${v}</span>`;
+  if (typeof v === 'string') {
+    return ID_RE.test(v) ? `<span class="s">"<span class="id" data-id="${v}">${v}</span>"</span>` : `<span class="s">${esc(JSON.stringify(v))}</span>`;
+  }
+  if (Array.isArray(v)) {
+    if (!v.length) return '[]';
+    return '[\n' + v.map((x) => next + highlight(x, next)).join(',\n') + '\n' + ind + ']';
+  }
+  const keys = Object.keys(v);
+  if (!keys.length) return '{}';
+  return '{\n' + keys.map((k) => `${next}<span class="k">"${esc(k)}"</span>: ${highlight(v[k], next)}`).join(',\n') + '\n' + ind + '}';
+}
+
+document.addEventListener('click', (e) => {
+  const id = e.target.dataset && e.target.dataset.id;
+  if (!id) return;
+  navigator.clipboard?.writeText(id).then(() => toast('Copiado: ' + id), () => toast(id));
+  if (id.startsWith('sup_')) remember('id_supplier', id);
+  if (id.startsWith('opm_')) remember('id_opportunity_match', id);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && current) { e.preventDefault(); send(); }
+});
+
+const params = new URLSearchParams(location.search);
+$('#base-url').value = params.get('api') || store.get('base') || window.PUBLIKOU_CONFIG?.apiUrl || 'http://localhost:3333';
+$('#base-url').onchange = (e) => store.set('base', e.target.value.trim());
+$('#token').value = store.get('token') || '';
+$('#token').onchange = (e) => { store.set('token', e.target.value.trim()); renderSession(); };
+$('#logout').onclick = () => {
+  ['token', 'name', 'id:id_user', 'id:id_supplier', 'id:id_opportunity_match'].forEach((k) => store.set(k, null));
+  $('#token').value = '';
+  renderSession();
+  if (current) select(ENDPOINTS.indexOf(current));
+  toast('Sessão limpa');
+};
+
+renderNav();
+renderSession();
+select(Math.min(+(store.get('endpoint') || 2), ENDPOINTS.length - 1));
+</script>
+</body>
+</html>
