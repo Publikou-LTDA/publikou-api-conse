@@ -39,7 +39,11 @@ const ERRORS = {
   'error.invalid_value_range': 'Valor mínimo maior que o máximo.',
   'error.city_state_mismatch': 'O município não é dessa UF.',
   'error.forbidden': 'Sem permissão (precisa de usuário adm).',
-  'error.sync_not_failed': 'Só dá para tentar de novo uma sincronização que falhou.',
+  'error.sync_not_failed': 'Só dá para tentar de novo uma sincronização que falhou ou foi parada.',
+  'error.sync_not_running': 'Essa sincronização não está rodando.',
+  'error.classification_running': 'Já tem uma classificação rodando.',
+  'error.classification_run_not_failed': 'Só dá para tentar de novo uma classificação que falhou ou foi parada.',
+  'error.classification_run_not_running': 'Essa classificação não está rodando.',
 };
 
 class ApiError extends Error {
@@ -630,17 +634,22 @@ async function setStatus(i, status) {
 
 async function viewAdmin() {
   if (session.type !== 'adm') throw new ApiError(403, 'error.forbidden', '');
-  const [syncs, stats] = await Promise.all([
+  const [syncs, runs, stats] = await Promise.all([
     api('GET', '/internal/sync', { query: { page_size: 15 } }),
+    api('GET', '/internal/classification/run', { query: { page_size: 10 } }).catch(() => null),
     api('GET', '/internal/classification/stats').catch(() => null),
   ]);
   const pct = (v) => v == null ? '—' : Math.round(v * 100) + '%';
   const statusBadge = (s) => `<span class="badge ${s === 'success' ? 'ok' : s === 'failed' ? 'err' : 'warn'}">${s}</span>`;
+  const actions = (s, kind, id) => s === 'running'
+    ? `<button class="sm" onclick="stopRun('${kind}', '${id}', this)">Parar</button>`
+    : s === 'failed' || s === 'stopped' ? `<button class="sm" onclick="retryRun('${kind}', '${id}', this)">Tentar de novo</button>` : '';
   const jobs = [
     ['sync-insert', 'Buscar contratações novas', 'Baixa do PNCP as contratações publicadas na janela configurada.'],
     ['sync-update', 'Atualizar contratações', 'Reconsulta as contratações abertas para pegar mudanças.'],
     ['classify-pending', 'Classificar itens', 'Liga os itens sem classe ao catálogo CATMAT/CATSER.'],
   ];
+  const running = (syncs.data || []).some((s) => s.status === 'running') || (runs?.data || []).some((r) => r.status === 'running');
   return {
     html: `
     <h1>Administração</h1>
@@ -650,32 +659,55 @@ async function viewAdmin() {
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="spread"><h2>Sincronizações recentes</h2><button class="sm" onclick="render()">Atualizar</button></div>
-      <table><thead><tr><th>Início</th><th>Tipo</th><th>Modalidade</th><th>Janela</th><th>Status</th><th>Contratações</th><th></th></tr></thead><tbody>
+      <table><thead><tr><th>Início</th><th>Tipo</th><th>Modalidade</th><th>Janela</th><th>Status</th><th>Página</th><th>Contratações</th><th></th></tr></thead><tbody>
       ${(syncs.data || []).map((s) => `<tr><td>${fmtDate(s.started_at)}</td><td>${s.type || '—'}</td><td>${MODALITY[s.modality] || s.modality || '—'}</td>
         <td class="small">${new Date(s.window_start).toLocaleDateString('pt-BR')} – ${new Date(s.window_end).toLocaleDateString('pt-BR')}</td>
-        <td>${statusBadge(s.status)}</td><td>${s.procurement_count ?? '—'}</td>
-        <td>${s.status === 'failed' ? `<button class="sm" onclick="retrySync('${s.id_sync}', this)">Tentar de novo</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Nenhuma sincronização ainda.</td></tr>'}
+        <td>${statusBadge(s.status)}</td><td>${esc(s.cursor ?? '—')}</td><td>${s.procurement_count ?? '—'}</td>
+        <td>${actions(s.status, 'sync', s.id_sync)}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">Nenhuma sincronização ainda.</td></tr>'}
       </tbody></table>
     </div>
+    ${runs ? `<div class="card" style="margin-bottom:16px">
+      <div class="spread"><h2>Classificações recentes</h2><button class="sm" onclick="render()">Atualizar</button></div>
+      <table><thead><tr><th>Início</th><th>Fim</th><th>Status</th><th>Itens lidos</th><th>Classificados</th><th>Cursor</th><th></th></tr></thead><tbody>
+      ${runs.data.map((r) => `<tr><td>${fmtDate(r.started_at)}</td><td>${r.finished_at ? fmtDate(r.finished_at) : '—'}</td><td>${statusBadge(r.status)}</td>
+        <td>${r.item_count}</td><td>${r.classified_count}${r.item_count ? ` <span class="muted small">(${pct(r.classified_count / r.item_count)})</span>` : ''}</td>
+        <td class="small muted">${esc(r.cursor ?? '—')}</td><td>${actions(r.status, 'classification/run', r.id_classification_run)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Nenhuma classificação ainda.</td></tr>'}
+      </tbody></table>
+    </div>` : ''}
     ${stats ? `<div class="card"><h2>Classificação dos itens (contratações abertas)</h2>
       <table><thead><tr><th>Tipo</th><th>Itens</th><th>Com classe</th><th>Conferidos</th><th>Precisão</th><th>Por método</th></tr></thead><tbody>
       ${stats.types.map((t) => `<tr><td>${t.type === 'service' ? 'Serviço' : 'Material'}</td><td>${t.total}</td><td>${pct(t.covered)}</td><td>${t.reviewed}</td><td>${pct(t.precision)}</td>
         <td class="small">${t.methods.filter((m) => m.count).map((m) => `${m.method}: ${m.count}`).join(' · ')}</td></tr>`).join('')}
       </tbody></table></div>` : ''}`,
+    // Enquanto algo roda, atualiza sozinho para acompanhar página, contagem e status.
+    mount: () => {
+      if (!running) return;
+      const seq = renderSeq;
+      setTimeout(() => { if (seq === renderSeq && location.hash === '#/adm') render(); }, 5000);
+    },
   };
 }
 
 function runJob(job, btn) {
   busy(btn, async () => {
     await api('POST', `/internal/job/${job}/run`);
-    toast(`${job} iniciado em segundo plano. Atualize a lista em alguns segundos.`);
+    toast(`${job} iniciado em segundo plano.`);
+    render();
   });
 }
 
-function retrySync(id, btn) {
+function retryRun(kind, id, btn) {
   busy(btn, async () => {
-    await api('POST', `/internal/sync/${id}/retry`);
+    await api('POST', `/internal/${kind}/${id}/retry`);
     toast('Retentativa iniciada.');
+    render();
+  });
+}
+
+function stopRun(kind, id, btn) {
+  busy(btn, async () => {
+    await api('POST', `/internal/${kind}/${id}/stop`);
+    toast('Parada pedida: termina depois da página atual.');
     render();
   });
 }

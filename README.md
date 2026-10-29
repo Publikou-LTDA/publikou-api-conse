@@ -31,7 +31,7 @@ A API precisa estar em **HTTPS** (página HTTPS não chama `http://`, mixed cont
 - **Minhas empresas**: lista e cadastro por CNPJ (consulta a BrasilAPI; só MEI, ME e EPP).
 - **O que eu vendo**: navega no catálogo CATMAT/CATSER (grupo › classe › item) ou busca pelo nome; escolhe classes e itens, palavras-chave, onde atende (UF ou município) e filtros. "Salvar e buscar oportunidades" salva e roda o match.
 - **Oportunidades**: botão "Fazer match agora", lista por nota com o motivo, itens compatíveis, prazo, valor, link do PNCP e "Me interessa" / "Não é pra mim".
-- **Administração** (só usuário com `type = 'adm'`): roda `sync-insert`, `sync-update` e `classify-pending`, lista as sincronizações (com retentativa) e mostra a cobertura da classificação.
+- **Administração** (só usuário com `type = 'adm'`): roda `sync-insert`, `sync-update` e `classify-pending`; lista as sincronizações (página atual, contratações, parar e tentar de novo) e as execuções da classificação (itens lidos, classificados, cursor, parar e tentar de novo), atualizando sozinha enquanto algo roda; mostra a cobertura da classificação.
 
 `console.html` é o console genérico de endpoints (todas as rotas, JSON cru).
 
